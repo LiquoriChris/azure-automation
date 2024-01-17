@@ -1,0 +1,42 @@
+Describe 'Get-PBIDatasetRefreshStatus' {
+    BeforeAll {
+        $RootFolder = Split-Path -Path $PSScriptRoot -Parent
+        $InformationFunction = Join-Path -Path (Split-Path -Path $RootFolder -Parent) -ChildPath 'helperFunctions/Get-FunctionInformation.ps1'
+        . $InformationFunction
+        $ScriptPath = Join-Path -Path $RootFolder -ChildPath 'Invoke-PBIDatasetRefresh.ps1'
+        $PowerBIAccessToken = (Get-AzAccessToken -ResourceUrl https://analysis.windows.net/powerbi/api).Token
+    }
+    Context 'Run Tests' {
+        BeforeAll {
+            $FunctionInformation = Get-FunctionInformation -Path $ScriptPath |Where-Object -Property Name -eq 'Get-PBIDatasetRefreshStatus'
+            $CreateFunction = "function $($FunctionInformation.Name) { $($FunctionInformation.Definition) }"
+            $GetFunction = [scriptblock]::Create($CreateFunction)
+            . $GetFunction
+            $Object = [pscustomobject]@{
+                WorkspaceName = 'workspace1'
+                WorkspaceId = '8956a288-0ff5-4574-8a09-f5280e8a4190'
+                DatasetName = 'dataset1'
+                DatasetId = '2e0fdc94-25ea-4e32-a0eb-5e8694d1abbe'
+            }
+        }
+        It 'Should return success status' {
+            Mock -CommandName Start-Sleep -MockWith {}
+            Mock -CommandName Invoke-RestMethod -MockWith {@{
+                value = @{
+                    status = 'Completed'
+                }
+            }}
+            $Result = Get-PBIDatasetRefreshStatus -InputObject $Object
+            $Result |Should -BeExactly 'dataset1 refresh has a status of: Completed'
+        }
+        It 'Should return failed status' {
+            Mock -CommandName Start-Sleep -MockWith {}
+            Mock -CommandName Invoke-RestMethod -MockWith {@{
+                value = @{
+                    status = 'Failed'
+                }
+            }}
+            {Get-PBIDatasetRefreshStatus -InputObject $Object -ErrorAction Stop} |Should -Throw "dataset1 refresh has a status of: Failed`n"
+        }
+    }
+}
